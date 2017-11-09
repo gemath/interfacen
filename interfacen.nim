@@ -109,16 +109,6 @@ proc nameInfo(n: NimNode): tuple[name: NimNode, exp: bool] =
     result = (name, true)
   else: err(n)
 
-#[
-          Infix
-            Ident !"is"
-            Call
-              DotExpr
-                Ident !"this"
-                Ident !"willHelpMoving"
-              Ident !"float"
-            Ident !"bool"
-]#
 proc transformDef(def: NimNode): NimNode =
   var
     name = def[0]
@@ -126,7 +116,7 @@ proc transformDef(def: NimNode): NimNode =
     resultType = params[0]
     paramTypes: seq[NimNode] = @[]
 
-  for i in 1..params.len-1:
+  for i in 2..params.len-1:
     let param = params[i]
     param.expectKind nnkIdentDefs
     paramTypes.add param[1]
@@ -144,26 +134,21 @@ proc transformDef(def: NimNode): NimNode =
   )
 
 proc processBody(body: NimNode): tuple[body: NimNode, ext: seq[NimNode]] =
-  result = (body, @[])
-  for i in 0..body.len-1:
-    var stmt = body[i]
+  result = (newStmtList(), @[])
+  for stmt in body:
     if stmt.kind in {nnkProcDef, nnkMethodDef}:
-      var def = stmt.copy
-      body.del i
-      body.insert(i, transformDef stmt)
+      result.body.add stmt.transformDef
       if nnkStmtList == stmt.last.kind:
-        body.insert(i, transformDef stmt.copy)
-        result.ext.add def
-      else:
-        body.insert(i, transformDef stmt)
-
+        result.ext.add stmt.copy
+    else:
+      result.body.add stmt.copy
 
 proc ifaceInfo(args: NimNode): tuple[body: NimNode, ext: seq[NimNode]] =
   var
-    fst, name, nameTree, fstBase, body: NimNode
+    fst, name, nameTree, fstBase, tBody: NimNode
     op: string
     exp: bool
-    bases, ext: seq[NimNode] = @[]
+    bases, baseRefs, ext: seq[NimNode] = @[]
 
   args.expectKind nnkArglist
   fst = args[0]
@@ -180,10 +165,18 @@ proc ifaceInfo(args: NimNode): tuple[body: NimNode, ext: seq[NimNode]] =
     (name, exp) = nameInfo fst
   if nnkStmtList != args.last.kind:
     err(fst, "body expected.")
-  (body, ext) = processBody args.last
+  (tBody, ext) = processBody args.last
+
+  # TODO: We need this because concept refinement doesn't work?!
+  if bases.len > 0:
+    for i in bases.len-1..0:
+      tBody.insert(0, newTree(nnkInfix,
+        newIdentNode("is"),
+        newIdentNode(!concVarName),
+        newIdentNode(bases[i].ident)
+      ))
 
 #  echo "$# $# $#" % [$name, $exp, $bases]
-  echo args.last.treeRepr
 
   result = (
     newTree(nnkTypeSection,
@@ -204,16 +197,20 @@ proc ifaceInfo(args: NimNode): tuple[body: NimNode, ext: seq[NimNode]] =
           else:
             newEmptyNode()
           ,
-          newEmptyNode(),
-          body
+          tBody
         )
       )
     ),
     ext
   )
 
-#  echo result.treeRepr
-        
+  echo "------- body:"
+  echo result.body.treeRepr
+  echo "------- ext:"
+  for e in result.ext:
+    echo e.treeRepr
+#[
+]#
 
 macro Interface*(args: varargs[untyped]): untyped =
   let ii = ifaceInfo args
@@ -221,4 +218,6 @@ macro Interface*(args: varargs[untyped]): untyped =
  
 macro ImplicitInterface*(args: varargs[untyped]): untyped =
   let ii = ifaceInfo args
-  result = newStmtList(ii.body, ii.ext)
+  result = newStmtList(ii.body)
+  for e in ii.ext:
+    result.add e

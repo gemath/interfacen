@@ -1,32 +1,46 @@
-import interfacen, macros
+import macros ,interfacen
 
 type
-  Selma = object
-    n: int
+  Cup = object of RootObj
+    weight: float
 
+  CoffeeCup = object of Cup
+
+  BigCoffeeMug = object of CoffeeCup
+
+  TeaCup = object of Cup
+
+#type  WaterResistant = concept this
+Interface WaterResistant:
+#  this.resistsFor() is float
+  proc resistsFor(w: WaterResistant): float
+
+#type Washable = concept this of WaterResistant
+Interface Washable of WaterResistant:
+#  this.wash() is bool
+  proc wash(w: Washable): bool
+
+proc resistsFor(c: Cup): float =
+  result = 2435.6
+
+proc wash(c: Cup): bool =
+  result = true
+  echo "Washing a Cup."
 #[
-dumpTree:
-  explicit do:
-    type C = concept this
-      this.willHelpMoving(float) is bool
-  do:
-    proc willHelpMoving(float): bool
 ]#
 
-Interface *Friend:
-  type 
-    BeerSupply = enum
-      none, some, loads, allOfIt
-  const beerInFridge = some
-  proc willHelpMoving(f: Friend, hours: float): bool
-  proc greet(f: Friend): string =
-    echo "Howdy"
+proc wash(c: CoffeeCup): bool =
+  result = true
+  echo "Washing a CoffeeCup."
 
-Interface *Buddy of Friend:
-  method willHelpMoving(f: Friend, hours: float): bool =
-    result = true
+implements WaterResistant, Washable: Cup
 
-ImplicitInterface Fringe:
-  proc knows(p: Fringe, f: Friend): bool
+proc keepClean(w: Washable) =
+  discard w.wash()
 
-implements Friend, Fringe: Selma
+let
+  c = Cup()
+  cc = CoffeeCup()
+
+keepClean(c)
+keepClean(cc)
