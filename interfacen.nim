@@ -17,8 +17,8 @@
 ]#
 
 discard """
-  Interfaces are implemented as dumbed-down concepts here. Their main purpose
-  is giving people something familiar to work with where the full power of
+  Interfaces are implemented as a sub-set of concepts here. Their main purpose
+  is to give people something familiar to work with where the full power of
   concepts is not necessary.
 """
 
@@ -116,22 +116,29 @@ proc transformDef(def: NimNode): NimNode =
     resultType = params[0]
     paramTypes: seq[NimNode] = @[]
 
+ #echo "name: " & name.treeRepr
+ #echo "params: " & params.treeRepr
+
   for i in 2..params.len-1:
     let param = params[i]
     param.expectKind nnkIdentDefs
     paramTypes.add param[1]
 
-  result = newTree(nnkInfix,
-    newIdentNode "is",
-    newCall(
+  let call = newCall(
       newTree(nnkDotExpr,
         newIdentNode(concVarName),
         name
       ),
       paramTypes
-    ),
-    resultType
-  )
+    )
+  result = if nnkIdent == resultType.kind:
+      newTree(nnkInfix,
+        newIdentNode "is",
+        call,
+        resultType
+      )
+    else:
+      call
 
 proc processBody(body: NimNode): tuple[body: NimNode, ext: seq[NimNode]] =
   result = (newStmtList(), @[])
@@ -204,12 +211,12 @@ proc ifaceInfo(args: NimNode): tuple[body: NimNode, ext: seq[NimNode]] =
     ext
   )
 
+#[
   echo "------- body:"
   echo result.body.treeRepr
   echo "------- ext:"
   for e in result.ext:
     echo e.treeRepr
-#[
 ]#
 
 macro Interface*(args: varargs[untyped]): untyped =
